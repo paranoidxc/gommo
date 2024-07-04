@@ -1,8 +1,8 @@
 package main
 
 import (
-	"image"
-	_ "image/png"
+	"fmt"
+	"gommo/engine/asset"
 	"os"
 
 	"github.com/faiface/pixel"
@@ -28,12 +28,21 @@ func runGame() {
 
 	win.SetSmooth(false)
 
-	manSprite, err := getSprite("man.png")
+	load := asset.NewLoad(os.DirFS("./"))
+	//load := asset.NewLoad(os.DirFS("./images"))
+	spritesheet, err := load.Spritesheet("packed.json")
+	if err != nil {
+		panic(err)
+	}
+
+	//manSprite, err := load.Sprite("man.png")
+	manSprite, err := spritesheet.Get("man.png")
 	if err != nil {
 		panic(err)
 	}
 	manPosition := win.Bounds().Center()
 
+	fmt.Println("start")
 	for !win.JustPressed(pixelgl.KeyEscape) {
 		win.Clear(pixel.RGB(0, 0, 0))
 
@@ -52,21 +61,6 @@ func runGame() {
 
 		manSprite.Draw(win, pixel.IM.Scaled(pixel.ZV, 2.0).Moved(manPosition))
 		win.Update()
-	}
-}
 
-func getSprite(path string) (*pixel.Sprite, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
 	}
-	defer file.Close()
-
-	img, _, err := image.Decode(file)
-	if err != nil {
-		return nil, err
-	}
-
-	pic := pixel.PictureDataFromImage(img)
-	return pixel.NewSprite(pic, pic.Bounds()), nil
 }
