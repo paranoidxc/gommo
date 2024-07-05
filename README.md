@@ -4,6 +4,8 @@ go get github.com/faiface/pixel
 go get github.com/jstewart7/packer
 github.com/unitoftime/packer
 
+go get nhooyr.io/websocket
+
 
 packer --input sprites --output ./path/to/file
 

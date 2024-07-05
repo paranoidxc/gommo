@@ -1,17 +1,20 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"gommo"
 	"gommo/engine/asset"
-	"gommo/engine/pgen"
 	"gommo/engine/render"
 	"gommo/engine/tilemap"
-	"math"
+	"log"
 	"os"
 	"time"
 
 	"github.com/faiface/pixel"
 	"github.com/faiface/pixel/pixelgl"
+
+	"nhooyr.io/websocket"
 )
 
 func check(err error) {
@@ -21,6 +24,31 @@ func check(err error) {
 }
 
 func main() {
+	// setup network
+	url := "ws://localhost:8000"
+	ctx := context.Background()
+	c, resp, err := websocket.Dial(ctx, url, nil)
+	check(err)
+
+	log.Println("Connection Response:", resp)
+
+	conn := websocket.NetConn(ctx, c, websocket.MessageBinary)
+	go func() {
+		counter := byte(0)
+		for {
+			time.Sleep(1 * time.Second)
+			n, err := conn.Write([]byte{counter})
+			if err != nil {
+				log.Println("Error Sending:", err)
+				return
+			}
+
+			log.Println("Sent n Bytes:", n)
+			counter++
+		}
+	}()
+
+	// start pixel
 	pixelgl.Run(runGame)
 }
 
@@ -45,48 +73,24 @@ func runGame() {
 
 	// Create Tilemap
 	seed := time.Now().UTC().UnixNano()
-	octaves := []pgen.Octave{
-		pgen.Octave{0.01, 0.6},
-		pgen.Octave{0.06, 0.3},
-		pgen.Octave{0.1, 0.07},
-		pgen.Octave{0.2, 0.02},
-		pgen.Octave{0.4, 0.01},
-	}
-	exponent := 0.8
-	terrain := pgen.NewNoiseMap(seed, octaves, exponent)
 
-	waterLevel := 0.5
-	beachLevel := waterLevel + 0.1
-
-	islandExponent := 2.0
+	mapSize := 1000
 	tileSize := 16
-	mapSize := 500
-	tiles := make([][]tilemap.Tile, mapSize, mapSize)
-	for x := range tiles {
-		tiles[x] = make([]tilemap.Tile, mapSize, mapSize)
-		for y := range tiles[x] {
-			height := terrain.Get(x, y)
+	tmap := gommo.CreateTilemap(seed, mapSize, tileSize)
 
-			// modify height to represent an island
-			{
-				dx := float64(x)/float64(mapSize) - 0.5
-				dy := float64(y)/float64(mapSize) - 0.5
-				d := math.Sqrt(dx*dx+dy*dy) * 2
-				d = math.Pow(d, islandExponent)
-				height = (1 - d + height) / 2
-			}
-			if height < waterLevel {
-				tiles[x][y] = GetTile(spritesheet, WaterTile)
-			} else if height < beachLevel {
-				tiles[x][y] = GetTile(spritesheet, DirtTile)
-			} else {
-				tiles[x][y] = GetTile(spritesheet, GrassTile)
-			}
-		}
-	}
-	batch := pixel.NewBatch(&pixel.TrianglesData{}, spritesheet.Picture())
-	tmap := tilemap.New(tiles, batch, tileSize)
-	tmap.Rebatch()
+	grassTile, err := spritesheet.Get("grass0.png")
+	check(err)
+	dirtTile, err := spritesheet.Get("dirt0.png")
+	check(err)
+	waterTile, err := spritesheet.Get("water0.png")
+	check(err)
+
+	tmapRender := render.NewTilemapRender(spritesheet, map[tilemap.TileType]*pixel.Sprite{
+		gommo.GrassTile: grassTile,
+		gommo.DirtTile:  dirtTile,
+		gommo.WaterTile: waterTile,
+	})
+	tmapRender.Batch(tmap)
 
 	// create people
 	spawnPoint := pixel.V(
@@ -137,7 +141,7 @@ func runGame() {
 
 		win.SetMatrix(camera.Mat())
 		// render first because tile behide the people
-		tmap.Draw(win)
+		tmapRender.Draw(win)
 		for i := range people {
 			people[i].Draw(win)
 		}
@@ -146,34 +150,6 @@ func runGame() {
 		win.Update()
 	}
 	fmt.Println("Game Quit")
-}
-
-const (
-	GrassTile tilemap.TileType = iota
-	DirtTile
-	WaterTile
-)
-
-func GetTile(ss *asset.Spritesheet, t tilemap.TileType) tilemap.Tile {
-	spriteName := ""
-	switch t {
-	case GrassTile:
-		spriteName = "grass0.png"
-	case DirtTile:
-		spriteName = "dirt0.png"
-	case WaterTile:
-		spriteName = "water0.png"
-	default:
-		panic("Unknow TileType")
-	}
-
-	sprite, err := ss.Get(spriteName)
-	check(err)
-
-	return tilemap.Tile{
-		Type:   t,
-		Sprite: sprite,
-	}
 }
 
 type Keybinds struct {
