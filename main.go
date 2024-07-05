@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"gommo/engine/asset"
+	"gommo/engine/render"
 	"os"
 
 	"github.com/faiface/pixel"
@@ -62,20 +63,32 @@ func runGame() {
 		Right: pixelgl.KeyD,
 	}))
 
+	camera := render.NewCamera(win, 0, 0)
+	zoomSpeed := 0.1
+
 	fmt.Println("Game Start")
 	for !win.JustPressed(pixelgl.KeyEscape) {
 		win.Clear(pixel.RGB(0, 0, 0))
 
-		// 不能使用 for range
+		scroll := win.MouseScroll()
+		if scroll.Y != 0 {
+			camera.Zoom += zoomSpeed * scroll.Y
+		}
+
+		// 不能使用 for kv range
 		for i := range people {
 			people[i].HandleInput(win)
 		}
-
 		// Collison Detection
 
+		camera.Position = people[0].Position
+		camera.Update()
+
+		win.SetMatrix(camera.Mat())
 		for i := range people {
 			people[i].Draw(win)
 		}
+		win.SetMatrix(pixel.IM)
 
 		win.Update()
 	}
