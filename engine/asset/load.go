@@ -130,5 +130,4 @@ func (s *Spritesheet) Get(name string) (*pixel.Sprite, error) {
 
 func (s *Spritesheet) Picture() pixel.Picture {
 	return s.picture
-
 }

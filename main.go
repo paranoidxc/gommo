@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"gommo/engine/asset"
 	"gommo/engine/render"
+	"gommo/engine/tilemap"
 	"os"
 
 	"github.com/faiface/pixel"
@@ -31,19 +32,20 @@ func runGame() {
 
 	load := asset.NewLoad(os.DirFS("./"))
 	//load := asset.NewLoad(os.DirFS("./images"))
-	spritesheet, err := load.Spritesheet("packed.json")
+	//spritesheet, err := load.Spritesheet("packed.json")
+	spritesheet, err := load.Spritesheet("spritesheet.json")
 	if err != nil {
 		panic(err)
 	}
 
 	//manSprite, err := load.Sprite("man.png")
-	manSprite, err := spritesheet.Get("man.png")
+	manSprite, err := spritesheet.Get("man_0.png")
 	if err != nil {
 		panic(err)
 	}
 	manPosition := win.Bounds().Center()
 
-	hatManSprite, err := spritesheet.Get("man.png")
+	hatManSprite, err := spritesheet.Get("man_1.png")
 	if err != nil {
 		panic(err)
 	}
@@ -62,6 +64,27 @@ func runGame() {
 		Left:  pixelgl.KeyA,
 		Right: pixelgl.KeyD,
 	}))
+
+	grassSprite, err := spritesheet.Get("grass0.png")
+	if err != nil {
+		panic(err)
+	}
+
+	tileSize := 16
+	mapSize := 100
+	tiles := make([][]tilemap.Tile, mapSize, mapSize)
+	for x := range tiles {
+		tiles[x] = make([]tilemap.Tile, mapSize, mapSize)
+		for y := range tiles[x] {
+			tiles[x][y] = tilemap.Tile{
+				Type:   0,
+				Sprite: grassSprite,
+			}
+		}
+	}
+	batch := pixel.NewBatch(&pixel.TrianglesData{}, spritesheet.Picture())
+	tmap := tilemap.New(tiles, batch, tileSize)
+	tmap.Rebatch()
 
 	camera := render.NewCamera(win, 0, 0)
 	zoomSpeed := 0.1
@@ -85,6 +108,8 @@ func runGame() {
 		camera.Update()
 
 		win.SetMatrix(camera.Mat())
+		// render first because tile behide the people
+		tmap.Draw(win)
 		for i := range people {
 			people[i].Draw(win)
 		}
