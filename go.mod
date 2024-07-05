@@ -4,6 +4,7 @@ go 1.22.2
 
 require (
 	github.com/faiface/pixel v0.10.0
+	github.com/ojrac/opensimplex-go v1.0.2
 	github.com/unitoftime/packer v0.0.0-20230818221437-1f2c1b1e4275
 )
 

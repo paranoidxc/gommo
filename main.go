@@ -3,9 +3,12 @@ package main
 import (
 	"fmt"
 	"gommo/engine/asset"
+	"gommo/engine/pgen"
 	"gommo/engine/render"
 	"gommo/engine/tilemap"
+	"math"
 	"os"
+	"time"
 
 	"github.com/faiface/pixel"
 	"github.com/faiface/pixel/pixelgl"
@@ -41,17 +44,43 @@ func runGame() {
 	check(err)
 
 	// Create Tilemap
-	grassSprite, err := spritesheet.Get("grass0.png")
-	check(err)
+	seed := time.Now().UTC().UnixNano()
+	octaves := []pgen.Octave{
+		pgen.Octave{0.01, 0.6},
+		pgen.Octave{0.06, 0.3},
+		pgen.Octave{0.1, 0.07},
+		pgen.Octave{0.2, 0.02},
+		pgen.Octave{0.4, 0.01},
+	}
+	exponent := 0.8
+	terrain := pgen.NewNoiseMap(seed, octaves, exponent)
+
+	waterLevel := 0.5
+	beachLevel := waterLevel + 0.1
+
+	islandExponent := 2.0
 	tileSize := 16
-	mapSize := 100
+	mapSize := 500
 	tiles := make([][]tilemap.Tile, mapSize, mapSize)
 	for x := range tiles {
 		tiles[x] = make([]tilemap.Tile, mapSize, mapSize)
 		for y := range tiles[x] {
-			tiles[x][y] = tilemap.Tile{
-				Type:   0,
-				Sprite: grassSprite,
+			height := terrain.Get(x, y)
+
+			// modify height to represent an island
+			{
+				dx := float64(x)/float64(mapSize) - 0.5
+				dy := float64(y)/float64(mapSize) - 0.5
+				d := math.Sqrt(dx*dx+dy*dy) * 2
+				d = math.Pow(d, islandExponent)
+				height = (1 - d + height) / 2
+			}
+			if height < waterLevel {
+				tiles[x][y] = GetTile(spritesheet, WaterTile)
+			} else if height < beachLevel {
+				tiles[x][y] = GetTile(spritesheet, DirtTile)
+			} else {
+				tiles[x][y] = GetTile(spritesheet, GrassTile)
 			}
 		}
 	}
@@ -126,20 +155,25 @@ const (
 )
 
 func GetTile(ss *asset.Spritesheet, t tilemap.TileType) tilemap.Tile {
-	name := ""
+	spriteName := ""
 	switch t {
 	case GrassTile:
-		name = "grass0.png"
+		spriteName = "grass0.png"
 	case DirtTile:
-		name = "grass0.png"
+		spriteName = "dirt0.png"
 	case WaterTile:
-		name = "water.png"
+		spriteName = "water0.png"
 	default:
 		panic("Unknow TileType")
 	}
 
 	sprite, err := ss.Get(spriteName)
 	check(err)
+
+	return tilemap.Tile{
+		Type:   t,
+		Sprite: sprite,
+	}
 }
 
 type Keybinds struct {
