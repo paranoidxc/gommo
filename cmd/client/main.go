@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"gommo"
 	"gommo/engine/asset"
+	"gommo/engine/ecs"
 	"gommo/engine/render"
 	"gommo/engine/tilemap"
 	"log"
@@ -65,6 +66,8 @@ func runGame() {
 
 	win.SetSmooth(false)
 
+	engine := ecs.NewEngine()
+
 	load := asset.NewLoad(os.DirFS("./"))
 	//load := asset.NewLoad(os.DirFS("./images"))
 	//spritesheet, err := load.Spritesheet("packed.json")
@@ -93,9 +96,9 @@ func runGame() {
 	tmapRender.Batch(tmap)
 
 	// create people
-	spawnPoint := pixel.V(
-		float64(tileSize*mapSize/2),
-		float64(tileSize*mapSize/2))
+	spawnPoint := Transform{
+		float64(tileSize * mapSize / 2),
+		float64(tileSize * mapSize / 2)}
 
 	//manSprite, err := load.Sprite("man.png")
 	manSprite, err := spritesheet.Get("man_0.png")
@@ -104,19 +107,25 @@ func runGame() {
 	hatManSprite, err := spritesheet.Get("man_1.png")
 	check(err)
 
-	people := make([]Person, 0)
-	people = append(people, NewPerson(manSprite, spawnPoint, Keybinds{
+	manId := engine.NewId()
+	ecs.Write(engine, manId, Sprite{manSprite})
+	ecs.Write(engine, manId, spawnPoint)
+	ecs.Write(engine, manId, Keybinds{
 		Up:    pixelgl.KeyUp,
 		Down:  pixelgl.KeyDown,
 		Left:  pixelgl.KeyLeft,
 		Right: pixelgl.KeyRight,
-	}))
-	people = append(people, NewPerson(hatManSprite, spawnPoint, Keybinds{
+	})
+
+	hatManId := engine.NewId()
+	ecs.Write(engine, hatManId, Sprite{hatManSprite})
+	ecs.Write(engine, hatManId, spawnPoint)
+	ecs.Write(engine, hatManId, Keybinds{
 		Up:    pixelgl.KeyW,
 		Down:  pixelgl.KeyS,
 		Left:  pixelgl.KeyA,
 		Right: pixelgl.KeyD,
-	}))
+	})
 
 	camera := render.NewCamera(win, 0, 0)
 	zoomSpeed := 0.1
@@ -130,21 +139,21 @@ func runGame() {
 			camera.Zoom += zoomSpeed * scroll.Y
 		}
 
-		// 不能使用 for kv range
-		for i := range people {
-			people[i].HandleInput(win)
-		}
-		// Collison Detection
+		HandleInput(win, engine)
 
-		camera.Position = people[0].Position
+		transform := Transform{}
+		ok := ecs.Read(engine, manId, &transform)
+		if ok {
+			camera.Position = pixel.V(transform.X, transform.Y)
+		}
 		camera.Update()
 
 		win.SetMatrix(camera.Mat())
 		// render first because tile behide the people
 		tmapRender.Draw(win)
-		for i := range people {
-			people[i].Draw(win)
-		}
+
+		DrawSprites(win, engine)
+
 		win.SetMatrix(pixel.IM)
 
 		win.Update()
@@ -156,6 +165,42 @@ type Keybinds struct {
 	Up, Down, Left, Right pixelgl.Button
 }
 
+func (t *Keybinds) ComponentSet(val interface{}) {
+	*t = val.(Keybinds)
+}
+
+type Sprite struct {
+	*pixel.Sprite
+}
+
+func (t *Sprite) ComponentSet(val interface{}) {
+	*t = val.(Sprite)
+}
+
+type Transform struct {
+	X, Y float64
+}
+
+func (t *Transform) ComponentSet(val interface{}) {
+	*t = val.(Transform)
+}
+
+func DrawSprites(win *pixelgl.Window, engine *ecs.Engine) {
+	ecs.Each(engine, Sprite{}, func(id ecs.Id, a interface{}) {
+		sprite := a.(Sprite)
+
+		transform := Transform{}
+		ok := ecs.Read(engine, id, &transform)
+		if !ok {
+			return
+		}
+
+		pos := pixel.V(transform.X, transform.Y)
+		sprite.Draw(win, pixel.IM.Scaled(pixel.ZV, 2.0).Moved(pos))
+	})
+}
+
+/*
 type Person struct {
 	Sprite   *pixel.Sprite
 	Position pixel.Vec
@@ -176,18 +221,31 @@ func NewPerson(sprite *pixel.Sprite,
 func (p *Person) Draw(win *pixelgl.Window) {
 	p.Sprite.Draw(win, pixel.IM.Scaled(pixel.ZV, 2.0).Moved(p.Position))
 }
+*/
 
-func (p *Person) HandleInput(win *pixelgl.Window) {
-	if win.Pressed(p.Keybinds.Left) {
-		p.Position.X -= 2.0
-	}
-	if win.Pressed(p.Keybinds.Right) {
-		p.Position.X += 2.0
-	}
-	if win.Pressed(p.Keybinds.Up) {
-		p.Position.Y += 2.0
-	}
-	if win.Pressed(p.Keybinds.Down) {
-		p.Position.Y -= 2.0
-	}
+func HandleInput(win *pixelgl.Window, engine *ecs.Engine) {
+	ecs.Each(engine, Keybinds{}, func(id ecs.Id, a interface{}) {
+		keybinds := a.(Keybinds)
+
+		transform := Transform{}
+		ok := ecs.Read(engine, id, &transform)
+		if !ok {
+			return
+		}
+
+		if win.Pressed(keybinds.Left) {
+			transform.X -= 2.0
+		}
+		if win.Pressed(keybinds.Right) {
+			transform.X += 2.0
+		}
+		if win.Pressed(keybinds.Up) {
+			transform.Y += 2.0
+		}
+		if win.Pressed(keybinds.Down) {
+			transform.Y -= 2.0
+		}
+
+		ecs.Write(engine, id, transform)
+	})
 }
